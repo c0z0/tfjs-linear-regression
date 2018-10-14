@@ -2,8 +2,9 @@ let xData = [];
 let yData = [];
 let button, learningRateSlider;
 
-// mx + b
-let m, b;
+// m1x^2 + m2x + b
+
+let params = Array(2).fill(0);
 
 let optimizer;
 
@@ -11,8 +12,7 @@ function setup() {
   createCanvas(750, 750);
   background(50);
 
-  m = tf.variable(tf.scalar(random()));
-  b = tf.variable(tf.scalar(random()));
+  params = params.map(() => tf.variable(tf.scalar(random())));
 
   exportButton = createButton("Export data");
   exportButton.position(10, width + 20);
@@ -27,21 +27,38 @@ function setup() {
     yData = [];
   });
 
-  retrainButton = createButton("Retrain");
-  retrainButton.position(340, width + 20);
-  retrainButton.mousePressed(() => {
-    m.assign(tf.scalar(random()));
-    b.assign(tf.scalar(random()));
+  polyGrade = createSelect();
+  polyGrade.position(340, width + 20);
+
+  for (let i = 1; i < 15; i++) polyGrade.option(`${i} grade polynome`);
+  polyGrade.changed(() => {
+    const grade = parseInt(polyGrade.value().slice(0, 2));
+
+    params = Array(grade + 1)
+      .fill(0)
+      .map(() => tf.variable(tf.scalar(random())));
   });
 
-  learningRateSlider = createSlider(0, 0.5, 0.05, 0.01);
+  retrainButton = createButton("Retrain");
+  retrainButton.position(500, width + 20);
+  retrainButton.mousePressed(() => {
+    params.forEach(p => p.assign(tf.scalar(random())));
+  });
+
+  learningRateSlider = createSlider(0, 0.5, 0.1, 0.01);
   learningRateSlider.position(100, width + 20);
 }
 
 function predict(xData) {
   let x = tf.tensor1d(xData);
 
-  return x.mul(m).add(b);
+  return tf.tidy(() => {
+    let y = params[0];
+    for (let i = 1; i < params.length; i++) {
+      y = y.add(params[i].mul(x.pow(i)));
+    }
+    return y;
+  });
 }
 
 function loss(yh, yData) {
@@ -77,20 +94,24 @@ function draw() {
     ellipse(unmapData(x), width - unmapData(yData[i]), 8);
   });
 
-  const lineX1 = mapData(width * 0.1);
-  const lineX2 = mapData(width * 0.9);
-  tf.tidy(() => {
-    const [lineY1, lineY2] = predict([lineX1, lineX2]).dataSync();
+  beginShape();
 
-    stroke(255, 125, 0);
-    strokeWeight(3);
-    line(
-      unmapData(lineX1),
-      width - unmapData(lineY1),
-      unmapData(lineX2),
-      width - unmapData(lineY2)
-    );
+  stroke(255, 125, 0);
+  strokeWeight(4);
+  noFill();
+
+  let linexs = Array(Math.floor(2 / 0.01 + 1))
+    .fill(0)
+    .map((_, i) => -1 + i * 0.01);
+
+  tf.tidy(() => {
+    let lineys = predict(linexs).dataSync();
+    linexs.forEach((x, i) => {
+      vertex(unmapData(x), width - unmapData(lineys[i]));
+    });
   });
+
+  endShape();
 
   noStroke();
   fill(255);
@@ -99,7 +120,6 @@ function draw() {
       optimizer = tf.train.sgd(learningRateSlider.value());
 
       optimizer.minimize(() => loss(predict(xData), yData));
-      // optimizeManualy();
       text(
         `Learning rate: ${learningRateSlider.value()} Loss: ${
           loss(predict(xData), yData).dataSync()[0]
@@ -109,24 +129,4 @@ function draw() {
       );
     });
   } else text("Learning rate: " + learningRateSlider.value(), 10, height - 10);
-}
-
-function optimizeManualy() {
-  const gradM = tf
-    .tensor1d(yData)
-    .sub(predict(xData))
-    .mul(tf.tensor(xData))
-    .mul(tf.scalar(-1))
-    .mean()
-    .mul(2);
-
-  const gradB = tf
-    .tensor1d(yData)
-    .sub(predict(xData))
-    .mul(tf.scalar(-1))
-    .mean()
-    .mul(2);
-
-  m.assign(m.sub(tf.scalar(learningRate).mul(gradM)));
-  b.assign(b.sub(tf.scalar(learningRate).mul(gradB)));
 }
