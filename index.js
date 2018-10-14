@@ -1,11 +1,11 @@
 let xData = [];
 let yData = [];
+let button, learningRateSlider;
 
 // mx + b
 let m, b;
 
-let learningRate = 0.05;
-let optimizer = tf.train.sgd(learningRate);
+let optimizer;
 
 function setup() {
   createCanvas(750, 750);
@@ -13,6 +13,29 @@ function setup() {
 
   m = tf.variable(tf.scalar(random()));
   b = tf.variable(tf.scalar(random()));
+
+  exportButton = createButton("Export data");
+  exportButton.position(10, width + 20);
+  exportButton.mousePressed(() =>
+    console.log(JSON.stringify({ xData, yData }))
+  );
+
+  resetButton = createButton("Reset data");
+  resetButton.position(240, width + 20);
+  resetButton.mousePressed(() => {
+    xData = [];
+    yData = [];
+  });
+
+  retrainButton = createButton("Retrain");
+  retrainButton.position(340, width + 20);
+  retrainButton.mousePressed(() => {
+    m.assign(tf.scalar(random()));
+    b.assign(tf.scalar(random()));
+  });
+
+  learningRateSlider = createSlider(0, 0.5, 0.05, 0.01);
+  learningRateSlider.position(100, width + 20);
 }
 
 function predict(xData) {
@@ -39,6 +62,8 @@ function unmapData(data) {
 }
 
 function mouseClicked() {
+  if (mouseX < 0 || mouseX > width || mouseY < 0 || mouseY > width) return;
+
   xData.push(mapData(mouseX));
   yData.push(-mapData(mouseY));
 }
@@ -67,19 +92,23 @@ function draw() {
     );
   });
 
+  noStroke();
+  fill(255);
   if (xData.length > 1) {
     tf.tidy(() => {
-      noStroke();
+      optimizer = tf.train.sgd(learningRateSlider.value());
 
       optimizer.minimize(() => loss(predict(xData), yData));
       // optimizeManualy();
       text(
-        "Loss: " + loss(predict(xData), yData).dataSync()[0],
+        `Learning rate: ${learningRateSlider.value()} Loss: ${
+          loss(predict(xData), yData).dataSync()[0]
+        }`,
         10,
         height - 10
       );
     });
-  }
+  } else text("Learning rate: " + learningRateSlider.value(), 10, height - 10);
 }
 
 function optimizeManualy() {
