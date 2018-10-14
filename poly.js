@@ -1,18 +1,16 @@
 let xData = [];
 let yData = [];
-let button, learningRateSlider;
+let learningRateSlider;
 
-// m1x^2 + m2x + b
-
-let params = Array(2).fill(0);
-
-let optimizer;
+let params;
 
 function setup() {
   createCanvas(750, 750);
   background(50);
 
-  params = params.map(() => tf.variable(tf.scalar(random())));
+  params = Array(2)
+    .fill(0)
+    .map(() => tf.variable(tf.scalar(random())));
 
   exportButton = createButton("Export data");
   exportButton.position(10, width + 20);
@@ -52,13 +50,11 @@ function setup() {
 function predict(xData) {
   let x = tf.tensor1d(xData);
 
-  return tf.tidy(() => {
-    let y = params[0];
-    for (let i = 1; i < params.length; i++) {
-      y = y.add(params[i].mul(x.pow(i)));
-    }
-    return y;
-  });
+  let y = params[0];
+  for (let i = 1; i < params.length; i++) {
+    y = y.add(params[i].mul(x.pow(i)));
+  }
+  return y;
 }
 
 function loss(yh, yData) {
@@ -88,12 +84,39 @@ function mouseClicked() {
 function draw() {
   background(50);
 
+  tf.tidy(() => {
+    plotData();
+    plotModel();
+  });
+
+  noStroke();
+  fill(255);
+  if (xData.length > 1) tf.tidy(train);
+  else text("Learning rate: " + learningRateSlider.value(), 10, height - 10);
+}
+
+function train() {
+  optimizer = tf.train.sgd(learningRateSlider.value());
+
+  optimizer.minimize(() => loss(predict(xData), yData));
+  text(
+    `Learning rate: ${learningRateSlider.value()} Loss: ${
+      loss(predict(xData), yData).dataSync()[0]
+    }`,
+    10,
+    height - 10
+  );
+}
+
+function plotData() {
   xData.forEach((x, i) => {
     fill(255);
     noStroke();
     ellipse(unmapData(x), width - unmapData(yData[i]), 8);
   });
+}
 
+function plotModel() {
   beginShape();
 
   stroke(255, 125, 0);
@@ -104,29 +127,10 @@ function draw() {
     .fill(0)
     .map((_, i) => -1 + i * 0.01);
 
-  tf.tidy(() => {
-    let lineys = predict(linexs).dataSync();
-    linexs.forEach((x, i) => {
-      vertex(unmapData(x), width - unmapData(lineys[i]));
-    });
+  let lineys = predict(linexs).dataSync();
+  linexs.forEach((x, i) => {
+    vertex(unmapData(x), width - unmapData(lineys[i]));
   });
 
   endShape();
-
-  noStroke();
-  fill(255);
-  if (xData.length > 1) {
-    tf.tidy(() => {
-      optimizer = tf.train.sgd(learningRateSlider.value());
-
-      optimizer.minimize(() => loss(predict(xData), yData));
-      text(
-        `Learning rate: ${learningRateSlider.value()} Loss: ${
-          loss(predict(xData), yData).dataSync()[0]
-        }`,
-        10,
-        height - 10
-      );
-    });
-  } else text("Learning rate: " + learningRateSlider.value(), 10, height - 10);
 }
